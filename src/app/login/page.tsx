@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
+import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult, signInAnonymously } from 'firebase/auth';
 import { auth as getAuth } from '@/lib/firebase';
 import { getDocument, setDocument, COLLECTIONS } from '@/lib/firestore';
 import { HardHat, Phone, KeyRound, ArrowRight, Loader2, ArrowLeft } from 'lucide-react';
@@ -38,18 +38,17 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            setupRecaptcha();
-            const phoneNumber = phone.startsWith('+91') ? phone : `+91${phone}`;
-            const confirmation = await signInWithPhoneNumber(getAuth(), phoneNumber, window.recaptchaVerifier);
-            window.confirmationResult = confirmation;
+            // BYPASS OTP: We mock the OTP send for demo purposes
+            // setupRecaptcha();
+            // const phoneNumber = phone.startsWith('+91') ? phone : `+91${phone}`;
+            // const confirmation = await signInWithPhoneNumber(getAuth(), phoneNumber, window.recaptchaVerifier);
+            // window.confirmationResult = confirmation;
+
+            // Simulating network request
+            await new Promise(resolve => setTimeout(resolve, 800));
             setStep('otp');
         } catch (err: any) {
             setError(err.message || 'Failed to send OTP. Please try again.');
-            // Reset recaptcha on error
-            if (window.recaptchaVerifier) {
-                window.recaptchaVerifier.clear();
-                window.recaptchaVerifier = undefined as any;
-            }
         } finally {
             setLoading(false);
         }
@@ -61,26 +60,35 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            const result = await window.confirmationResult.confirm(otp);
+            // BYPASS OTP: Use Anonymous Sign-In to get a valid Firebase session
+            // const result = await window.confirmationResult.confirm(otp);
+            // const user = result.user;
+
+            const result = await signInAnonymously(getAuth());
             const user = result.user;
 
             // Check if user exists in Firestore
             const existingUser = await getDocument<AppUser>(COLLECTIONS.USERS, user.uid);
 
             if (existingUser && existingUser.role) {
+                // Also ensure phone number is updated if it was an anonymous account
+                if (!existingUser.mobile) {
+                    await setDocument(COLLECTIONS.USERS, user.uid, { mobile: '+91' + phone });
+                }
                 router.replace(`/${existingUser.role}`);
             } else {
                 // New user — save basic info and go to role selection
                 await setDocument(COLLECTIONS.USERS, user.uid, {
                     uid: user.uid,
-                    mobile: user.phoneNumber,
+                    mobile: '+91' + phone, // Use the provided phone instead of pulling from user object
                     status: 'pending',
                     createdAt: Date.now(),
                 });
                 router.replace('/select-role');
             }
         } catch (err: any) {
-            setError('Invalid OTP. Please try again.');
+            console.error(err);
+            setError('Error signing in. Please ensure Anonymous Auth is enabled in Firebase Authentication settings.');
         } finally {
             setLoading(false);
         }
