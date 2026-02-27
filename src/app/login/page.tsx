@@ -87,8 +87,13 @@ export default function LoginPage() {
                 router.replace('/select-role');
             }
         } catch (err: any) {
-            console.error(err);
-            setError('Error signing in. Please ensure Anonymous Auth is enabled in Firebase Authentication settings.');
+            console.error('Login error detailed:', err);
+
+            if (err.message?.includes('offline') || err.message?.includes('network')) {
+                setError('Network error: Please disable ad blockers (like Brave Shields) which may block Firebase connections.');
+            } else {
+                setError('Error signing in. ' + (err.message || 'Please ensure Anonymous Auth is enabled in Firebase Authentication settings.'));
+            }
         } finally {
             setLoading(false);
         }
